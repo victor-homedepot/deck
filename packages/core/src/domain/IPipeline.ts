@@ -15,6 +15,7 @@ export interface IPipeline {
   lastModifiedBy?: string;
   locked?: IPipelineLock;
   limitConcurrent: boolean;
+  maxConcurrentExecutions: number;
   manualStartAlert?: IPipelineManualStartAlert;
   migrationStatus?: string;
   name: string;
