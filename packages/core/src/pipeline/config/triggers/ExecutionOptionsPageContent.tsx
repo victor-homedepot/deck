@@ -23,6 +23,10 @@ export function ExecutionOptionsPageContent(props: IExecutionOptionsPageContentP
           )}
           onChange={() => {
             updatePipelineConfig({ limitConcurrent: !pipeline.limitConcurrent });
+            if (!pipeline.limitConcurrent && !pipeline.keepWaitingPipelines) {
+              pipeline.keepWaitingPipelines = true;
+              updatePipelineConfig({ keepWaitingPipelines: true });
+            }
           }}
           value={pipeline.limitConcurrent}
         />
