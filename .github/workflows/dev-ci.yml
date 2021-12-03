@@ -1,20 +1,20 @@
-name: Branch Build
+# This is a basic workflow to help you get started with Actions
 
+name: DEV-CI
+
+# Controls when the workflow will run
 on:
-  pull_request:
-  push:
-    branches:
-      - master
-      - release-*
+  # Allows you to run this workflow manually from the Actions tab
+  workflow_dispatch:
 
 env:
-  NODE_VERSION: 12.16.0
+  PROJECT_ID: ${{ secrets.GCP_PROJECT }}
 
+# A workflow run is made up of one or more jobs that can run sequentially or in parallel
 jobs:
   ci:
     # Meta-job that depends on the other job statuses.  Branch protection then checks this job status.
     name: Deck CI
-    if: startsWith(github.repository, 'spinnaker/')
     needs: [lint, test, build, functional-tests]
     runs-on: ubuntu-latest
     steps:
@@ -40,7 +40,6 @@ jobs:
           key: ${{ runner.os }}-yarn-${{ hashFiles('**/yarn.lock') }}
           restore-keys: |
             ${{ runner.os }}-yarn-
-
       - name: Install Dependencies
         run: yarn --frozen-lockfile
 
@@ -49,7 +48,6 @@ jobs:
           cd packages/eslint-plugin
           yarn tsc
           yarn test
-
       - name: Assert - no lint violations
         run: yarn lint
 
@@ -76,7 +74,6 @@ jobs:
           key: ${{ runner.os }}-yarn-${{ hashFiles('**/yarn.lock') }}
           restore-keys: |
             ${{ runner.os }}-yarn-
-
       - name: Install Dependencies
         run: yarn --frozen-lockfile
 
@@ -106,7 +103,6 @@ jobs:
           key: ${{ runner.os }}-yarn-${{ hashFiles('**/yarn.lock') }}
           restore-keys: |
             ${{ runner.os }}-yarn-
-
       - name: Install Dependencies
         run: yarn --frozen-lockfile
 
@@ -117,9 +113,19 @@ jobs:
         run: yarn functional
 
   build:
-    name: Production Build
+    name: Docker Production
     runs-on: ubuntu-latest
     steps:
+      # Setup gcloud CLI
+      - uses: google-github-actions/setup-gcloud@v0.2.0
+        with:
+          service_account_key: ${{ secrets.GCR_SA_KEY }}
+          project_id: ${{ secrets.GCP_PROJECT }}
+      # Configure Docker to use the gcloud command-line tool as a credential
+      # helper for authentication
+      - run: |-
+          gcloud --quiet auth configure-docker
+
       - uses: actions/checkout@v2
 
       - uses: actions/setup-node@v1
@@ -136,7 +142,6 @@ jobs:
           key: ${{ runner.os }}-yarn-${{ hashFiles('**/yarn.lock') }}
           restore-keys: |
             ${{ runner.os }}-yarn-
-
       - name: Install Dependencies
         run: yarn --frozen-lockfile
 
@@ -145,3 +150,16 @@ jobs:
 
       - name: Yarn Build
         run: yarn build
+
+      - name: List files
+        run: ls -lR
+
+      - name: Docker build
+        shell: bash
+        env:
+          PROJECT_ID: ${{ secrets.GCP_PROJECT }}
+        run: >
+          TAG_REG=us.gcr.io/$PROJECT_ID/spinnaker &&
+          NEW_VERSION=3.7.x.beta$(date '+%m%d%H%M') &&
+          docker build -f Dockerfile.slim -t ${TAG_REG}/deck:${NEW_VERSION} . &&
+          docker push ${TAG_REG}/deck:${NEW_VERSION}
